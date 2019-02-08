@@ -1,0 +1,148 @@
+---
+title: "Lab5"
+author: "Rae Fuhrman"
+date: "2/7/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(tidyverse)
+library(forecast)
+library(tseries)
+
+```
+
+
+```{r}
+energy <- read_csv("energy.csv")
+
+```
+
+Create ts time series data using information in res_total columns from 'energy'
+```{r}
+
+res_ts <- ts(energy$res_total, frequency = 12, start = c(1973,1))
+res_ts
+plot(res_ts)
+#looks like additive rather than multiplicative time series data. intermediate peaks have gotten increasingly large. 
+
+```
+
+decompose ts --> sometimes worth it to make other data ts so we can use a lot of the wonderful packages built into r
+
+```{r}
+
+res_dc <- decompose(res_ts)
+plot(res_dc)
+#seasonality is pretty big constributor given that its scale is on the order or hundreds which is a pretty big chunk of our total data
+
+```
+
+
+other cool way to present cool time series data
+
+```{r}
+
+monthplot(res_ts)
+ggseasonplot(res_ts, polar = TRUE) #plotting the time with each year, can also customize with all ggplot stuff. polar = true makes it a circular 
+
+```
+
+simple moving averages
+
+```{r}
+
+sma_res <- forecast::ma(res_ts, order = 5) #order is the window size
+plot(res_ts) #changing the window really drastically alters how the data appears so be very careful when presenting so we arent misleading to whats actually happen. always show original data and then on top of it show the moving average.
+lines(sma_res, col='red')
+
+```
+
+ACF for autocorrelation: function in baseR
+```{r}
+
+res_acf <- acf(res_ts)
+#see repeated correlation by cycles of one year with some more minor cycles 
+
+```
+
+Holt-Winters exponential smoothing
+repeatable and predictable outcome very suitable for time series forecasting
+
+```{r}
+
+res_hw <- HoltWinters(res_ts)
+res_hw
+
+plot(res_hw) #original data in black, modeled parameters by holt-winters in red
+
+```
+future forecasting with holt winters
+
+```{r}
+
+res_forecast <- forecast (res_hw, h=60)
+plot(res_forecast)
+
+```
+
+then check residuals
+
+```{r}
+
+hist(res_forecast$residuals)
+
+```
+
+j. Autoregressive integrated moving average (ARIMA) using auto.arima for p, d, q
+
+- Use auto.arima to estimate pdq
+
+```{r}
+
+res_pdq <- auto.arima(res_ts) #(1,0,2)(0,1,1)
+res_pdq
+
+```
+fit the arima model using those pdq inputs
+
+```{r}
+
+res_arima <- arima(res_ts, order = c(1,0,2), seasonal = list(order = c(0,1,1)))
+#with seasonal component must be given a list 
+```
+
+```{r}
+par(mfrow = c(1,2))
+hist(res_arima$residuals)
+qqnorm(res_arima$residuals)
+```
+
+
+```{r}
+forecast_res <- forecast(res_arima, h=72)
+plot(forecast_res)
+
+```
+
+now lets view in ggplot
+
+```{r}
+
+res_df <- data.frame(forecast_res)
+month_seq = seq(1,72)
+
+res_df_2 <- data.frame(month_seq, res_df)
+
+ggplot(res_df_2, aes(x = month_seq, y = Point.Forecast)) + 
+  geom_line() +
+  geom_ribbon(aes(ymin = Lo.95, ymax = Hi.95, alpha = 0.2)) +
+  theme_minimal()
+
+```
+
